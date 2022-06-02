@@ -25,7 +25,7 @@ midis_dir = os.path.join(dirname, 'EMOPIA_1.0/midis')
 index_filename = 'notes_index.bin'
 train_filename = 'train.bin'
 model_filename = 'model.weights'
-nr_of_midis = 500
+nr_of_midis = 1080
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 seq_length = 10
 track_length = 200
@@ -127,7 +127,7 @@ def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr
                              for n in seq_in])
                 else:
                     X.append([notes_index[n] for n in seq_in])
-                # print(notes_index)
+                # print("seq_out = ", seq_out)
                 Y.append(notes_index[seq_out])
         counter += 1
         # print(counter)
@@ -158,11 +158,12 @@ def get_notes(file):
         notes_to_parse = midi.flat.notes
     for element in notes_to_parse:
         if isinstance(element, note.Note):
-            # if element.octave == 5 or element.octave == 6:
-            notes.append(str(element.pitch))
+            if element.octave == 5 or element.octave == 6:
+                notes.append(str(element.pitch))
         elif isinstance(element, chord.Chord):
             # notes.append('.'.join(str(n) for n in element.normalOrder))
-            if all([n.octave == 5 or n.octave == 6 or n.octave == 7 for n in element]):
+            if all([n.octave in [5,6] for n in element]):
+                # print([n.octave for n in element])
                 notes.append(tuple([str(n.pitch) for n in element]))
     return notes
 
@@ -194,14 +195,10 @@ def make_index():
     print(q1_files + q2_files + q3_files + q4_files)
 
 
-    create_training_data(midis_dir, seq_length, 1,
-                         q1_index, train_filename, q1_files)
-    create_training_data(midis_dir, seq_length, 2,
-                         q2_index, train_filename, q2_files)
-    create_training_data(midis_dir, seq_length, 3,
-                         q3_index, train_filename, q3_files)
-    create_training_data(midis_dir, seq_length, 4,
-                         q4_index, train_filename, q4_files)
+    create_training_data(midis_dir, seq_length, 1, q1_index, train_filename, q1_files)
+    create_training_data(midis_dir, seq_length, 2, q2_index, train_filename, q2_files)
+    create_training_data(midis_dir, seq_length, 3, q3_index, train_filename, q3_files)
+    create_training_data(midis_dir, seq_length, 4, q4_index, train_filename, q4_files)
 
 
 def train(q):
