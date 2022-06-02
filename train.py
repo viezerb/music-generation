@@ -25,7 +25,7 @@ midis_dir = os.path.join(dirname, 'EMOPIA_1.0/midis')
 index_filename = 'notes_index.bin'
 train_filename = 'train.bin'
 model_filename = 'model.weights'
-nr_of_midis = 1080
+nr_of_midis = 150
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 seq_length = 10
 track_length = 200
@@ -75,14 +75,16 @@ def create_index(dirname, index_filename):
     all_q2 = set(q2_notes)
     all_q3 = set(q3_notes)
     all_q4 = set(q4_notes)
+    print("ALL Q2")
+    print(all_q2)
     print('All different Q1 notes/chords: {}'.format(len(all_q1)))
     print('All different Q2 notes/chords: {}'.format(len(all_q2)))
     print('All different Q3 notes/chords: {}'.format(len(all_q3)))
     print('All different Q4 notes/chords: {}'.format(len(all_q4)))
-    q1_stats = dict((k, v) for k, v in q1_stats.items() if v >= 3)
-    q2_stats = dict((k, v) for k, v in q2_stats.items() if v >= 3)
-    q3_stats = dict((k, v) for k, v in q3_stats.items() if v >= 3)
-    q4_stats = dict((k, v) for k, v in q4_stats.items() if v >= 3)
+    # q1_stats = dict((k, v) for k, v in q1_stats.items() if v >= 3)
+    # q2_stats = dict((k, v) for k, v in q2_stats.items() if v >= 3)
+    # q3_stats = dict((k, v) for k, v in q3_stats.items() if v >= 3)
+    # q4_stats = dict((k, v) for k, v in q4_stats.items() if v >= 3)
 
     q1_index = {n[1]: n[0] for n in enumerate(all_q1)}
     q2_index = {n[1]: n[0] for n in enumerate(all_q2)}
@@ -115,8 +117,11 @@ def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr
     counter = 0
     print(notes_index)
 
-    for f, count in tqdm(zip(os.listdir(dirname), range(nr_of_files))):
-        if "Q{}".format(q) in f:
+    for f in os.listdir(dirname):
+        if "Q{}_".format(q) in f:
+            counter += 1
+            print("counter = ", counter)
+            # print("f = ", f)
             notes = get_notes(os.path.join(dirname, f))
 
             for i in range(0, len(notes) - seq_length, 1):
@@ -129,8 +134,10 @@ def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr
                     X.append([notes_index[n] for n in seq_in])
                 # print("seq_out = ", seq_out)
                 Y.append(notes_index[seq_out])
-        counter += 1
-        # print(counter)
+        if (counter == nr_of_files):
+            print("counter = ", counter)
+            break
+        
 
     print('Q{} Training samples: {}'.format(q, len(X)))
     f = codecs.open(str("q{}_".format(q) + train_filename), 'wb')
@@ -163,7 +170,6 @@ def get_notes(file):
         elif isinstance(element, chord.Chord):
             # notes.append('.'.join(str(n) for n in element.normalOrder))
             if all([n.octave in [5,6] for n in element]):
-                # print([n.octave for n in element])
                 notes.append(tuple([str(n.pitch) for n in element]))
     return notes
 
