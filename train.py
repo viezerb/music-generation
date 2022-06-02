@@ -8,6 +8,7 @@ from keras.utils.np_utils import to_categorical
 from keras.models import Sequential
 from keras.layers import LSTM, Dropout, Dense, Activation, BatchNormalization as BatchNorm
 from keras.callbacks import ModelCheckpoint
+from keras.callbacks import TensorBoard
 from collections import Counter
 from tkinter import *
 import os
@@ -16,6 +17,7 @@ import glob
 import numpy as np
 import pickle
 import codecs
+import datetime
 
 
 dirname = '/Users/balazsviezer/code/music-generation/music-generation'
@@ -23,7 +25,8 @@ midis_dir = os.path.join(dirname, 'EMOPIA_1.0/midis')
 index_filename = 'notes_index.bin'
 train_filename = 'train.bin'
 model_filename = 'model.weights'
-nr_of_midis = 40
+nr_of_midis = 500
+log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 seq_length = 10
 track_length = 200
 normalize = False
@@ -35,6 +38,10 @@ def create_index(dirname, index_filename):
     q2_notes = []
     q3_notes = []
     q4_notes = []
+    q1_files = 0
+    q2_files = 0
+    q3_files = 0
+    q4_files = 0
     print("Creating index")
 
     for f, count in tqdm(zip(os.listdir(dirname), range(nr_of_midis))):
@@ -42,12 +49,16 @@ def create_index(dirname, index_filename):
         emotion = f[:2]
         if emotion == "Q1":
             q1_notes.extend(notes)
+            q1_files += 1
         elif emotion == "Q2":
             q2_notes.extend(notes)
+            q2_files += 1
         elif emotion == "Q3":
             q3_notes.extend(notes)
+            q3_files += 1
         elif emotion == "Q4":
             q4_notes.extend(notes)
+            q4_files += 1
         else:
             print("file error")
 
@@ -87,6 +98,8 @@ def create_index(dirname, index_filename):
     pickle.dump(q4_index, f)
     f.close()
 
+    return q1_files, q2_files, q3_files, q4_files
+
 
 def load_index(file):
     f = codecs.open(file, 'rb')
@@ -95,12 +108,14 @@ def load_index(file):
     return notes_index
 
 
-def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr_of_midis):
+def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr_of_files):
     X = []
     Y = []
-    print("Creating training data")
+    print("Creating training data for Q{}".format(q))
+    counter = 0
+    print(notes_index)
 
-    for f, count in tqdm(zip(os.listdir(dirname), range(nr_of_midis))):
+    for f, count in tqdm(zip(os.listdir(dirname), range(nr_of_files))):
         if "Q{}".format(q) in f:
             notes = get_notes(os.path.join(dirname, f))
 
@@ -112,7 +127,11 @@ def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr
                              for n in seq_in])
                 else:
                     X.append([notes_index[n] for n in seq_in])
+                # print(notes_index)
                 Y.append(notes_index[seq_out])
+        counter += 1
+        # print(counter)
+
     print('Q{} Training samples: {}'.format(q, len(X)))
     f = codecs.open(str("q{}_".format(q) + train_filename), 'wb')
     pickle.dump([np.array(X), np.array(Y)], f)
@@ -143,13 +162,8 @@ def get_notes(file):
             notes.append(str(element.pitch))
         elif isinstance(element, chord.Chord):
             # notes.append('.'.join(str(n) for n in element.normalOrder))
-            if any([n.octave == 5 or n.octave == 6 or n.octave == 7 for n in element]):
+            if all([n.octave == 5 or n.octave == 6 or n.octave == 7 for n in element]):
                 notes.append(tuple([str(n.pitch) for n in element]))
-
-
-# with open('notes', 'wb') as filepath:
-#     pickle.dump(notes, filepath)
-
     return notes
 
 
@@ -168,20 +182,26 @@ def create_model(X_shape, notes_index):
 
 
 def make_index():
-    create_index(midis_dir, index_filename)
+    q1_files, q2_files, q3_files, q4_files = create_index(midis_dir, index_filename)
     q1_index = load_index(str("q1_" + index_filename))
     q2_index = load_index(str("q2_" + index_filename))
     q3_index = load_index(str("q3_" + index_filename))
     q4_index = load_index(str("q4_" + index_filename))
 
+    print("files")
+    print(q1_files, q2_files, q3_files, q4_files)
+    print("total")
+    print(q1_files + q2_files + q3_files + q4_files)
+
+
     create_training_data(midis_dir, seq_length, 1,
-                         q1_index, train_filename, nr_of_midis)
+                         q1_index, train_filename, q1_files)
     create_training_data(midis_dir, seq_length, 2,
-                         q2_index, train_filename, nr_of_midis)
+                         q2_index, train_filename, q2_files)
     create_training_data(midis_dir, seq_length, 3,
-                         q3_index, train_filename, nr_of_midis)
+                         q3_index, train_filename, q3_files)
     create_training_data(midis_dir, seq_length, 4,
-                         q4_index, train_filename, nr_of_midis)
+                         q4_index, train_filename, q4_files)
 
 
 def train(q):
@@ -197,7 +217,10 @@ def train(q):
 
     model.compile(optimizer='adam',
                   loss='categorical_crossentropy', metrics=['accuracy'])
-    model.fit(X, Y, epochs=epochs, batch_size=32, validation_split=0.2)
+
+    tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+    model.fit(X, Y, epochs=epochs, batch_size=32, validation_split=0.2, callbacks=[tensorboard_callback])
     model.save_weights(str("q{}_".format(q) + model_filename))
 
 
