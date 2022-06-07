@@ -67,25 +67,27 @@ def create_index(dirname, index_filename):
     print(len(q2_notes))
     print(len(q3_notes))
     print(len(q4_notes))
-
+    q1_set = set(q1_notes)
+    q2_set = set(q2_notes)
+    q3_set = set(q3_notes)
+    q4_set = set(q4_notes)
     q1_counted = Counter(q1_notes)
-    q1_filtered = {key:val for key, val in q1_counted.items() if val >= 3}
     q2_counted = Counter(q2_notes)
-    q2_filtered = {key:val for key, val in q2_counted.items() if val >= 3}
     q3_counted = Counter(q3_notes)
-    q3_filtered = {key:val for key, val in q3_counted.items() if val >= 3}
     q4_counted = Counter(q4_notes)
-    q4_filtered = {key:val for key, val in q4_counted.items() if val >= 3}
 
-    q1_index = {n[1]: n[0] for n in enumerate(q1_filtered)}
-    q2_index = {n[1]: n[0] for n in enumerate(q2_filtered)}
-    q3_index = {n[1]: n[0] for n in enumerate(q3_filtered)}
-    q4_index = {n[1]: n[0] for n in enumerate(q4_filtered)}
+    q1_index = {n[1]: n[0] for n in enumerate(q1_set)}
+    q2_index = {n[1]: n[0] for n in enumerate(q2_set)}
+    q3_index = {n[1]: n[0] for n in enumerate(q3_set)}
+    q4_index = {n[1]: n[0] for n in enumerate(q4_set)}
+    print(q1_index)
 
     print('All different Q1 notes/chords: {}'.format(len(q1_index)))
     print('All different Q2 notes/chords: {}'.format(len(q2_index)))
     print('All different Q3 notes/chords: {}'.format(len(q3_index)))
     print('All different Q4 notes/chords: {}'.format(len(q4_index)))
+    print(q1_index)
+
     f = codecs.open(str("q1_" + index_filename), 'wb')
     pickle.dump(q1_index, f)
     f = codecs.open(str("q2_" + index_filename), 'wb')
@@ -96,8 +98,7 @@ def create_index(dirname, index_filename):
     pickle.dump(q4_index, f)
     f.close()
 
-
-    return q1_files, q2_files, q3_files, q4_files
+    return q1_counted, q2_counted, q3_counted, q4_counted
 
 
 def load_index(file):
@@ -107,7 +108,7 @@ def load_index(file):
     return notes_index
 
 
-def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr_of_files):
+def create_training_data(dirname, seq_length, q, notes_index, train_filename, index_count):
     X = []
     Y = []
     print("Creating training data for Q{}".format(q))
@@ -120,21 +121,21 @@ def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr
             seq_out = 0
 
             for i in range(0, len(notes) - seq_length, 1):
-                if len(seq_in) <= 10:
-                    if notes[i] in notes_index:
+                if  index_count[notes[i]] >= 3:
+                    if len(seq_in) < 10:
                         seq_in.append(notes[i])
-                        if len(seq_in) == 10:
-                            seq_out = notes[i]
-                            # seq_in = notes[i:i + seq_length]
-                            # seq_out = notes[i + seq_length]
-                            if normalize:
-                                X.append([notes_index[n] / len(notes_index)
-                                        for n in seq_in])
-                            else:
-                                X.append([notes_index[n] for n in seq_in])
-                            Y.append(notes_index[seq_out])
-                            seq_in = []
-                        # print("X = ", len(seq_in))
+                    else:
+                        seq_out = notes[i]
+                        # seq_in = notes[i:i + seq_length]
+                        # seq_out = notes[i + seq_length]
+                        if normalize:
+                            X.append([notes_index[n] / len(notes_index)
+                                    for n in seq_in])
+                        else:
+                            X.append([notes_index[n] for n in seq_in])
+                        Y.append(notes_index[seq_out])
+                        # print(seq_in)
+                        seq_in = []    
     print('Q{} Training samples: {}'.format(q, len(X)))
     f = codecs.open(str("q{}_".format(q) + train_filename), 'wb')
     pickle.dump([np.array(X), np.array(Y)], f)
@@ -182,29 +183,23 @@ def create_model(X_shape, notes_index):
 
 
 def make_index():
-    q1_files, q2_files, q3_files, q4_files = create_index(midis_dir, index_filename)
+    q1_counted, q2_counted, q3_counted, q4_counted = create_index(midis_dir, index_filename)
     q1_index = load_index(str("q1_" + index_filename))
     q2_index = load_index(str("q2_" + index_filename))
     q3_index = load_index(str("q3_" + index_filename))
     q4_index = load_index(str("q4_" + index_filename))
 
-    print("files")
-    print(q1_files, q2_files, q3_files, q4_files)
-    print("total")
-    print(q1_files + q2_files + q3_files + q4_files)
-
-
-    create_training_data(midis_dir, seq_length, 1, q1_index, train_filename, q1_files)
-    create_training_data(midis_dir, seq_length, 2, q2_index, train_filename, q2_files)
-    create_training_data(midis_dir, seq_length, 3, q3_index, train_filename, q3_files)
-    create_training_data(midis_dir, seq_length, 4, q4_index, train_filename, q4_files)
+    create_training_data(midis_dir, seq_length, 1, q1_index, train_filename, q1_counted)
+    create_training_data(midis_dir, seq_length, 2, q2_index, train_filename, q2_counted)
+    create_training_data(midis_dir, seq_length, 3, q3_index, train_filename, q3_counted)
+    create_training_data(midis_dir, seq_length, 4, q4_index, train_filename, q4_counted)
 
 
 def train(q):
     notes_index = load_index(str("q{}_".format(q) + index_filename))
     X, Y = load_training_data(str("q{}_".format(q) + train_filename))
     X = np.reshape(X, (X.shape[0], X.shape[1], 1))
-    Y = to_categorical(Y)
+    Y = to_categorical(Y, num_classes=len(notes_index))
     print(len(X))
     print(len(Y))
 
