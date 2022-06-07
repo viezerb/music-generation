@@ -120,21 +120,20 @@ def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr
             seq_out = 0
 
             for i in range(0, len(notes) - seq_length, 1):
-                if len(seq_in) < 10:
+                if len(seq_in) <= 10:
                     if notes[i] in notes_index:
                         seq_in.append(notes[i])
-                else:
-                    if notes[i] in  notes_index:
-                        seq_out = notes[i]
-                        # seq_in = notes[i:i + seq_length]
-                        # seq_out = notes[i + seq_length]
-                        if normalize:
-                            X.append([notes_index[n] / len(notes_index)
-                                    for n in seq_in])
-                        else:
-                            X.append([notes_index[n] for n in seq_in])
-                        Y.append(notes_index[seq_out])
-                        seq_in = []
+                        if len(seq_in) == 10:
+                            seq_out = notes[i]
+                            # seq_in = notes[i:i + seq_length]
+                            # seq_out = notes[i + seq_length]
+                            if normalize:
+                                X.append([notes_index[n] / len(notes_index)
+                                        for n in seq_in])
+                            else:
+                                X.append([notes_index[n] for n in seq_in])
+                            Y.append(notes_index[seq_out])
+                            seq_in = []
                         # print("X = ", len(seq_in))
     print('Q{} Training samples: {}'.format(q, len(X)))
     f = codecs.open(str("q{}_".format(q) + train_filename), 'wb')
