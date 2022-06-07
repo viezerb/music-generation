@@ -1,8 +1,5 @@
-*.bin
-*.index
 *.mid
 checkpoint
-*model.weights.data*
 .vscode
 # Byte-compiled / optimized / DLL files
 __pycache__/
