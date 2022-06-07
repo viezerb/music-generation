@@ -13,11 +13,11 @@ from collections import Counter
 from tkinter import *
 import os
 from tqdm import tqdm
-import glob
 import numpy as np
 import pickle
 import codecs
 import datetime
+import random
 
 
 dirname = '/Users/balazsviezer/code/music-generation/music-generation'
@@ -25,7 +25,7 @@ midis_dir = os.path.join(dirname, 'EMOPIA_1.0/midis')
 index_filename = 'notes_index.bin'
 train_filename = 'train.bin'
 model_filename = 'model.weights'
-nr_of_midis = 150
+nr_of_midis = 80
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 seq_length = 10
 track_length = 200
@@ -67,29 +67,21 @@ def create_index(dirname, index_filename):
     print(len(q3_notes))
     print(len(q4_notes))
 
-    q1_stats = Counter(q1_notes)
-    q2_stats = Counter(q2_notes)
-    q3_stats = Counter(q3_notes)
-    q4_stats = Counter(q4_notes)
     all_q1 = set(q1_notes)
     all_q2 = set(q2_notes)
     all_q3 = set(q3_notes)
     all_q4 = set(q4_notes)
-    print("ALL Q2")
-    print(all_q2)
-    print('All different Q1 notes/chords: {}'.format(len(all_q1)))
-    print('All different Q2 notes/chords: {}'.format(len(all_q2)))
-    print('All different Q3 notes/chords: {}'.format(len(all_q3)))
-    print('All different Q4 notes/chords: {}'.format(len(all_q4)))
-    # q1_stats = dict((k, v) for k, v in q1_stats.items() if v >= 3)
-    # q2_stats = dict((k, v) for k, v in q2_stats.items() if v >= 3)
-    # q3_stats = dict((k, v) for k, v in q3_stats.items() if v >= 3)
-    # q4_stats = dict((k, v) for k, v in q4_stats.items() if v >= 3)
 
-    q1_index = {n[1]: n[0] for n in enumerate(all_q1)}
-    q2_index = {n[1]: n[0] for n in enumerate(all_q2)}
-    q3_index = {n[1]: n[0] for n in enumerate(all_q3)}
-    q4_index = {n[1]: n[0] for n in enumerate(all_q4)}
+    q1_index = {n[1]: n[0] for n in enumerate(all_q1) if n[0] >= 3}
+    q2_index = {n[1]: n[0] for n in enumerate(all_q2) if n[0] >= 3}
+    q3_index = {n[1]: n[0] for n in enumerate(all_q3) if n[0] >= 3}
+    q4_index = {n[1]: n[0] for n in enumerate(all_q4) if n[0] >= 3}
+    print(q1_index)
+    print(len(q1_index))
+    print('All different Q1 notes/chords: {}'.format(len(q1_index)))
+    print('All different Q2 notes/chords: {}'.format(len(q2_index)))
+    print('All different Q3 notes/chords: {}'.format(len(q3_index)))
+    print('All different Q4 notes/chords: {}'.format(len(q4_index)))
     f = codecs.open(str("q1_" + index_filename), 'wb')
     pickle.dump(q1_index, f)
     f = codecs.open(str("q2_" + index_filename), 'wb')
@@ -99,6 +91,7 @@ def create_index(dirname, index_filename):
     f = codecs.open(str("q4_" + index_filename), 'wb')
     pickle.dump(q4_index, f)
     f.close()
+
 
     return q1_files, q2_files, q3_files, q4_files
 
@@ -114,31 +107,31 @@ def create_training_data(dirname, seq_length, q, notes_index, train_filename, nr
     X = []
     Y = []
     print("Creating training data for Q{}".format(q))
-    counter = 0
     print(notes_index)
 
     for f in os.listdir(dirname):
         if "Q{}_".format(q) in f:
-            counter += 1
-            print("counter = ", counter)
-            # print("f = ", f)
             notes = get_notes(os.path.join(dirname, f))
+            seq_in = []
+            seq_out = 0
 
             for i in range(0, len(notes) - seq_length, 1):
-                seq_in = notes[i:i + seq_length]
-                seq_out = notes[i + seq_length]
-                if normalize:
-                    X.append([notes_index[n] / len(notes_index)
-                             for n in seq_in])
+                if len(seq_in) < 10:
+                    if notes[i] in notes_index:
+                        seq_in.append(notes[i])
                 else:
-                    X.append([notes_index[n] for n in seq_in])
-                # print("seq_out = ", seq_out)
-                Y.append(notes_index[seq_out])
-        if (counter == nr_of_files):
-            print("counter = ", counter)
-            break
-        
-
+                    if notes[i] in  notes_index:
+                        seq_out = notes[i]
+                        # seq_in = notes[i:i + seq_length]
+                        # seq_out = notes[i + seq_length]
+                        if normalize:
+                            X.append([notes_index[n] / len(notes_index)
+                                    for n in seq_in])
+                        else:
+                            X.append([notes_index[n] for n in seq_in])
+                        Y.append(notes_index[seq_out])
+                        seq_in = []
+                        # print("X = ", len(seq_in))
     print('Q{} Training samples: {}'.format(q, len(X)))
     f = codecs.open(str("q{}_".format(q) + train_filename), 'wb')
     pickle.dump([np.array(X), np.array(Y)], f)
@@ -154,7 +147,6 @@ def load_training_data(file):
 
 def get_notes(file):
     notes = []
-    # print("Parsing %s" % file)
     midi = converter.parse(file)
 
     notes_to_parse = None
@@ -168,7 +160,6 @@ def get_notes(file):
             if element.octave == 5 or element.octave == 6:
                 notes.append(str(element.pitch))
         elif isinstance(element, chord.Chord):
-            # notes.append('.'.join(str(n) for n in element.normalOrder))
             if all([n.octave in [5,6] for n in element]):
                 notes.append(tuple([str(n.pitch) for n in element]))
     return notes
@@ -210,10 +201,12 @@ def make_index():
 def train(q):
     notes_index = load_index(str("q{}_".format(q) + index_filename))
     X, Y = load_training_data(str("q{}_".format(q) + train_filename))
+    print("len y = ", len(Y))
     X = np.reshape(X, (X.shape[0], X.shape[1], 1))
     Y = to_categorical(Y)
-
     print("X.shape = ", X.shape, ", Y.shape = ", Y.shape)
+    print(len(X))
+    print(len(Y))
 
     model = create_model(X.shape, notes_index)
     print(model.summary)
@@ -221,49 +214,10 @@ def train(q):
     model.compile(optimizer='adam',
                   loss='categorical_crossentropy', metrics=['accuracy'])
 
-    tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
-
-    model.fit(X, Y, epochs=epochs, batch_size=32, validation_split=0.2, callbacks=[tensorboard_callback])
+    # tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
+    model.fit(X, Y, epochs=epochs, batch_size=32, validation_split=0.2)
     model.save_weights(str("q{}_".format(q) + model_filename))
 
-
-def generate(q):
-    notes_index = load_index(str("q{}_".format(q) + index_filename))
-    notes_index_inv = {i[1]: i[0] for i in notes_index.items()}
-    X, Y = load_training_data(str("q{}_".format(q) + train_filename))
-    X = np.reshape(X, (X.shape[0], X.shape[1], 1))
-
-    model = create_model(X.shape, notes_index)
-    model.compile(optimizer='adam',
-                  loss='categorical_crossentropy', metrics=['accuracy'])
-    model.load_weights(str("q{}_".format(q) + model_filename))
-
-    start_notes = np.random.randint(0, len(notes_index), size=seq_length)
-    st = stream.Stream()
-
-    offset = 0
-
-    for i in range(track_length):
-        if normalize:
-            y = model.predict(np.reshape(
-                start_notes, (1, seq_length, 1)) / len(notes_index))
-        else:
-            y = model.predict(np.reshape(start_notes, (1, seq_length, 1)))
-
-        note_num = np.argmax(y)
-        note_str = notes_index_inv[note_num]
-        if isinstance(note_str, str):
-            note_out = note.Note(note_str)
-        else:
-            note_out = chord.Chord(note_str)
-        note_out.offset = offset
-        note_out.storedInstrument = instrument.Piano()
-        st.append(note_out)
-        offset += 0.5
-        start_notes = np.array(list(start_notes[1:]) + [note_num])
-        print(start_notes)
-
-    st.write('midi', 'q{}_out.mid'.format(q))
 
 def get_random_quarter(s1, s2):
     emotion = np.random.choice(np.arange(0,2), p=[s1 / 100.0, 1 - (s1 / 100.0)])
@@ -355,12 +309,19 @@ def run_generate(w1, w2):
         start_notes = np.array(list(start_notes[1:]) + [note_num])
         print(start_notes)
 
-    st.write('midi', 'out.mid')
+    st.write('midi', 'out' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '.mid')
 
 def generate_all():
     master = Tk()
+    master.resizable(width=False, height=False)
+    master.geometry("250x120")
+    label1 = Label(master, text="Valence")
+    label1.place(x=5, y=15)
+    # label1.pack()
     w1= Scale(master, from_=0, to=100, orient=HORIZONTAL)
     w1.pack()
+    label2 = Label(master, text="Arousal")
+    label2.place(x=5, y=56)
     w2 = Scale(master, from_=0, to=100, orient=HORIZONTAL)
     w2.pack()
     Button(master, text='Generate', command=lambda: run_generate(w1.get(), w2.get())).pack()
@@ -372,8 +333,5 @@ if __name__ == '__main__':
     train(2)
     train(3)
     train(4)
-    # generate(1)
-    # generate(2)
-    # generate(3)
-    # generate(4)
+
     # generate_all()
