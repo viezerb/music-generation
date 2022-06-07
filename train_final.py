@@ -1,3 +1,4 @@
+from gc import callbacks
 from json import load
 from operator import index
 from statistics import mode
@@ -17,7 +18,7 @@ import numpy as np
 import pickle
 import codecs
 import datetime
-import random
+import tensorflow as tf
 
 
 dirname = '/Users/balazsviezer/code/music-generation/music-generation'
@@ -25,7 +26,7 @@ midis_dir = os.path.join(dirname, 'EMOPIA_1.0/midis')
 index_filename = 'notes_index.bin'
 train_filename = 'train.bin'
 model_filename = 'model.weights'
-nr_of_midis = 80
+nr_of_midis = 300
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 seq_length = 10
 track_length = 200
@@ -67,21 +68,25 @@ def create_index(dirname, index_filename):
     print(len(q3_notes))
     print(len(q4_notes))
 
-    all_q1 = set(q1_notes)
-    all_q2 = set(q2_notes)
-    all_q3 = set(q3_notes)
-    all_q4 = set(q4_notes)
+    q1_counted = Counter(q1_notes)
+    q1_index = {key:val for key, val in q1_counted.items() if val >= 3}
+    q2_counted = Counter(q2_notes)
+    q2_index = {key:val for key, val in q2_counted.items() if val >= 3}
+    q3_counted = Counter(q3_notes)
+    q3_index = {key:val for key, val in q3_counted.items() if val >= 3}
+    q4_counted = Counter(q4_notes)
+    q4_index = {key:val for key, val in q4_counted.items() if val >= 3}
 
-    q1_index = {n[1]: n[0] for n in enumerate(all_q1) if n[0] >= 3}
-    q2_index = {n[1]: n[0] for n in enumerate(all_q2) if n[0] >= 3}
-    q3_index = {n[1]: n[0] for n in enumerate(all_q3) if n[0] >= 3}
-    q4_index = {n[1]: n[0] for n in enumerate(all_q4) if n[0] >= 3}
-    print(q1_index)
-    print(len(q1_index))
+    # q1_index = {n[1]: n[0] for n in enumerate(q1_counted) if n[0] >= 3}
+    # q2_index = {n[1]: n[0] for n in enumerate(q1_notes) if n[0] >= 3}
+    # q3_index = {n[1]: n[0] for n in enumerate(q2_notes) if n[0] >= 3}
+    # q4_index = {n[1]: n[0] for n in enumerate(q3_notes) if n[0] >= 3}
+
     print('All different Q1 notes/chords: {}'.format(len(q1_index)))
     print('All different Q2 notes/chords: {}'.format(len(q2_index)))
     print('All different Q3 notes/chords: {}'.format(len(q3_index)))
     print('All different Q4 notes/chords: {}'.format(len(q4_index)))
+    print(q1_index)
     f = codecs.open(str("q1_" + index_filename), 'wb')
     pickle.dump(q1_index, f)
     f = codecs.open(str("q2_" + index_filename), 'wb')
@@ -160,7 +165,7 @@ def get_notes(file):
             if element.octave == 5 or element.octave == 6:
                 notes.append(str(element.pitch))
         elif isinstance(element, chord.Chord):
-            if all([n.octave in [5,6] for n in element]):
+            if all([n.octave in [4,5,6,7] for n in element]):
                 notes.append(tuple([str(n.pitch) for n in element]))
     return notes
 
@@ -168,8 +173,7 @@ def get_notes(file):
 def create_model(X_shape, notes_index):
     model = Sequential()
 
-    model.add(LSTM(256, return_sequences=True, input_shape=(
-        X_shape[1], X_shape[2]), recurrent_dropout=0.3))
+    model.add(LSTM(256, return_sequences=True, input_shape=(X_shape[1], X_shape[2]), recurrent_dropout=0.3))
     model.add(LSTM(256))
     model.add(Dropout(0.3))
     model.add(Dense(256, activation='relu'))
@@ -201,9 +205,11 @@ def make_index():
 def train(q):
     notes_index = load_index(str("q{}_".format(q) + index_filename))
     X, Y = load_training_data(str("q{}_".format(q) + train_filename))
+    print(Y)
     print("len y = ", len(Y))
+    print("len notes index =", len(notes_index))
     X = np.reshape(X, (X.shape[0], X.shape[1], 1))
-    Y = to_categorical(Y)
+    Y = to_categorical
     print("X.shape = ", X.shape, ", Y.shape = ", Y.shape)
     print(len(X))
     print(len(Y))
@@ -211,11 +217,10 @@ def train(q):
     model = create_model(X.shape, notes_index)
     print(model.summary)
 
-    model.compile(optimizer='adam',
-                  loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
-    # tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
-    model.fit(X, Y, epochs=epochs, batch_size=32, validation_split=0.2)
+    tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
+    model.fit(X, Y, epochs=epochs, batch_size=32, validation_split=0.2, callbacks=[tensorboard_callback])
     model.save_weights(str("q{}_".format(q) + model_filename))
 
 
