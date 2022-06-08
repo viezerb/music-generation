@@ -1,6 +1,8 @@
 from gc import callbacks
 from json import load
+from multiprocessing import queues
 from operator import index
+from re import L
 from statistics import mode
 from music21 import converter, instrument, note, chord, stream
 from pip import main
@@ -39,34 +41,24 @@ def create_index(dirname, index_filename):
     q2_notes = []
     q3_notes = []
     q4_notes = []
-    q1_files = 0
-    q2_files = 0
-    q3_files = 0
-    q4_files = 0
+
     print("Creating index")
 
     for f, count in tqdm(zip(os.listdir(dirname), range(nr_of_midis))):
+        print(f)
         notes = get_notes(os.path.join(dirname, f))
         emotion = f[:2]
         if emotion == "Q1":
             q1_notes.extend(notes)
-            q1_files += 1
         elif emotion == "Q2":
             q2_notes.extend(notes)
-            q2_files += 1
         elif emotion == "Q3":
             q3_notes.extend(notes)
-            q3_files += 1
         elif emotion == "Q4":
             q4_notes.extend(notes)
-            q4_files += 1
         else:
             print("file error")
-
-    print(len(q1_notes))
-    print(len(q2_notes))
-    print(len(q3_notes))
-    print(len(q4_notes))
+            
     q1_set = set(q1_notes)
     q2_set = set(q2_notes)
     q3_set = set(q3_notes)
@@ -80,13 +72,13 @@ def create_index(dirname, index_filename):
     q2_index = {n[1]: n[0] for n in enumerate(q2_set)}
     q3_index = {n[1]: n[0] for n in enumerate(q3_set)}
     q4_index = {n[1]: n[0] for n in enumerate(q4_set)}
-    print(q1_index)
+    print(q2_index)
 
-    print('All different Q1 notes/chords: {}'.format(len(q1_index)))
-    print('All different Q2 notes/chords: {}'.format(len(q2_index)))
-    print('All different Q3 notes/chords: {}'.format(len(q3_index)))
-    print('All different Q4 notes/chords: {}'.format(len(q4_index)))
-    print(q1_index)
+    print('All different Q1 notes/chords: {}'.format(len(q1_counted)))
+    print('All different Q2 notes/chords: {}'.format(len(q2_counted)))
+    print('All different Q3 notes/chords: {}'.format(len(q3_counted)))
+    print('All different Q4 notes/chords: {}'.format(len(q4_counted)))
+    print(q2_index)
 
     f = codecs.open(str("q1_" + index_filename), 'wb')
     pickle.dump(q1_index, f)
@@ -116,26 +108,28 @@ def create_training_data(dirname, seq_length, q, notes_index, train_filename, in
 
     for f in os.listdir(dirname):
         if "Q{}_".format(q) in f:
+            # print(f)
             notes = get_notes(os.path.join(dirname, f))
+            # print(notes)
             seq_in = []
             seq_out = 0
-
             for i in range(0, len(notes) - seq_length, 1):
-                if  index_count[notes[i]] >= 3:
+                if notes[i] in  notes_index:
                     if len(seq_in) < 10:
                         seq_in.append(notes[i])
                     else:
-                        seq_out = notes[i]
-                        # seq_in = notes[i:i + seq_length]
-                        # seq_out = notes[i + seq_length]
                         if normalize:
                             X.append([notes_index[n] / len(notes_index)
                                     for n in seq_in])
                         else:
                             X.append([notes_index[n] for n in seq_in])
+                        seq_out = notes[i]
                         Y.append(notes_index[seq_out])
-                        # print(seq_in)
-                        seq_in = []    
+                        seq_in = []
+                # seq_in = notes[i:i + seq_length]
+                # seq_out = notes[i + seq_length]
+                
+                # print(seq_in)
     print('Q{} Training samples: {}'.format(q, len(X)))
     f = codecs.open(str("q{}_".format(q) + train_filename), 'wb')
     pickle.dump([np.array(X), np.array(Y)], f)
@@ -164,7 +158,7 @@ def get_notes(file):
             if element.octave == 5 or element.octave == 6:
                 notes.append(str(element.pitch))
         elif isinstance(element, chord.Chord):
-            if all([n.octave in [4,5,6,7] for n in element]):
+            if all([n.octave in [5,6] for n in element]):
                 notes.append(tuple([str(n.pitch) for n in element]))
     return notes
 
@@ -172,10 +166,10 @@ def get_notes(file):
 def create_model(X_shape, notes_index):
     model = Sequential()
 
-    model.add(LSTM(256, return_sequences=True, input_shape=(X_shape[1], X_shape[2]), recurrent_dropout=0.3))
-    model.add(LSTM(256))
+    model.add(LSTM(64, return_sequences=True, input_shape=(X_shape[1], X_shape[2]), recurrent_dropout=0.3))
+    model.add(LSTM(64))
     model.add(Dropout(0.3))
-    model.add(Dense(256, activation='relu'))
+    model.add(Dense(64, activation='relu'))
     model.add(Dropout(0.3))
     model.add(Dense(len(notes_index), activation='softmax'))
 
@@ -198,6 +192,7 @@ def make_index():
 def train(q):
     notes_index = load_index(str("q{}_".format(q) + index_filename))
     X, Y = load_training_data(str("q{}_".format(q) + train_filename))
+    print(X)
     X = np.reshape(X, (X.shape[0], X.shape[1], 1))
     Y = to_categorical(Y, num_classes=len(notes_index))
     print(len(X))
@@ -323,7 +318,7 @@ def generate_all():
 
 if __name__ == '__main__':
     make_index()
-    train(1)
+    # train(1)
     train(2)
     train(3)
     train(4)
