@@ -48,7 +48,7 @@ def create_index(dirname, index_filename):
     files = os.listdir(dirname)
     random.shuffle(files)
     for f, count in tqdm(zip(files, range(nr_of_midis))):
-        print(f)
+        #print(f)
         notes = get_notes(os.path.join(dirname, f))
         emotion = f[:2]
         if emotion == "Q1":
@@ -158,11 +158,11 @@ def get_notes(file):
         notes_to_parse = midi.flat.notes
     for element in notes_to_parse:
         if isinstance(element, note.Note):
-            if element.octave == 5 or element.octave == 6:
-                notes.append(str(element.pitch))
+            #if element.octave == 5 or element.octave == 6:
+            notes.append(str(element.pitch))
         elif isinstance(element, chord.Chord):
-            if all([n.octave in [4,5,6] for n in element]):
-                notes.append(tuple([str(n.pitch) for n in element]))
+            #if all([n.octave in [4,5,6] for n in element]):
+            notes.append(tuple([str(n.pitch) for n in element]))
     return notes
 
 
@@ -303,13 +303,13 @@ def run_generate(w1, w2):
 
     st.write('midi', 'outputs/out' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + '.mid')
 if __name__ == '__main__':
-    #make_index()
-    #train(1)
-    #train(2)
-    #train(3)
-    #train(4)
+    make_index()
+    train(1)
+    train(2)
+    train(3)
+    train(4)
 
-    run_generate(100,100)
-    run_generate(100,0)
-    run_generate(0,100)
-    run_generate(0,0)
+    #run_generate(100,100)
+    #run_generate(100,0)
+    #run_generate(0,100)
+    #run_generate(0,0)
